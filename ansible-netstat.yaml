@@ -1,0 +1,37 @@
+---
+- name: Collect netstat information and compile into CSV
+  hosts: all
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+  gather_facts: yes
+  tasks:
+    - name: Run netstat command
+      shell: netstat -tuln | grep -v 127.0.0.1 | grep -v 'Active Internet connections' | grep -v 'Proto'
+      register: netstat_output
+
+    - name: Save header to local CSV file (only once)
+      local_action:
+        module: copy
+        content: "Host,Protocol,Local Address,Port,State\n"
+        dest: /tmp/netstat_info.csv
+        mode: '0644'
+      delegate_to: localhost
+      run_once: true
+
+    - name: Parse and format netstat output for each host
+      local_action:
+        module: lineinfile
+        path: /tmp/netstat_info.csv
+        line: "{{ ansible_fqdn }},{{ item.split()[0] }},{{ item.split()[3].split(':')[0] }},{{ item.split()[3].split(':')[1] }},{{ item.split()[5] }}"
+      when: "item.split() | length >= 6"
+      with_items: "{{ netstat_output.stdout_lines }}"
+      delegate_to: localhost
+      run_once: false
+
+    - name: Sort final CSV by host, preserving header
+      local_action:
+        module: shell
+        cmd: "tail -n +2 /tmp/netstat_info.csv | sort -t, -k1,1 > /tmp/netstat_sorted_body.csv && head -n 1 /tmp/netstat_info.csv > /tmp/netstat_info_sorted.csv && cat /tmp/netstat_sorted_body.csv >> /tmp/netstat_info_sorted.csv"
+      delegate_to: localhost
+      run_once: true
+

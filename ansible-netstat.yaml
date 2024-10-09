@@ -18,11 +18,21 @@
       delegate_to: localhost
       run_once: true
 
+    - name: Determine host identifier
+      set_fact:
+        host_identifier: >-
+          {{
+            (ansible_fqdn != 'localhost' and ansible_fqdn) or
+            (ansible_hostname != 'localhost' and ansible_hostname) or
+            ansible_default_ipv4.address or
+            inventory_hostname
+          }}
+
     - name: Parse and format netstat output for each host
       local_action:
         module: lineinfile
         path: /tmp/netstat_info.csv
-        line: "{{ ansible_fqdn }},{{ item.split()[0] }},{{ item.split()[3].split(':')[0] }},{{ item.split()[3].split(':')[1] }},{{ item.split()[5] }}"
+        line: "{{ host_identifier }},{{ item.split()[0] }},{{ item.split()[3].split(':')[0] }},{{ item.split()[3].split(':')[1] }},{{ item.split()[5] }}"
       when: "item.split() | length >= 6"
       with_items: "{{ netstat_output.stdout_lines }}"
       delegate_to: localhost
@@ -34,4 +44,3 @@
         cmd: "tail -n +2 /tmp/netstat_info.csv | sort -t, -k1,1 > /tmp/netstat_sorted_body.csv && head -n 1 /tmp/netstat_info.csv > /tmp/netstat_info_sorted.csv && cat /tmp/netstat_sorted_body.csv >> /tmp/netstat_info_sorted.csv"
       delegate_to: localhost
       run_once: true
-

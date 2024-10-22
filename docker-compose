@@ -1,0 +1,61 @@
+version: '3.5'
+
+services:
+  postgres:
+    container_name: postgres
+    image: ghcr.io/envops-github/sql-xgate-sql-xgate-postgres:main-5901b83
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Unix_11!}
+      PGDATA: /data/postgres
+    volumes:
+      - postgres:/data/postgres
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  guac-api:
+    image: guacamole/guacamole:1.5.3
+    ports:
+      - "8089:8080"
+    environment:
+      - TOTP_ENABLED=true
+      - GUACD_HOSTNAME=guacd
+      - GUACD_PORT=4822
+      - POSTGRESQL_DATABASE=postgres
+      - POSTGRESQL_HOSTNAME=postgres
+      - POSTGRESQL_PORT=5432
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=Unix_11!
+      - RECORDING_SEARCH_PATH=/tmp
+      - HISTORY_PATH=/tmp
+    volumes:
+      - shared-tmp:/tmp
+
+  guacd:
+    image: guacamole/guacd:1.5.3
+    ports:
+      - "4822:4822"
+    environment:
+      - GUACD_LOG_LEVEL=debug
+    restart: always
+    volumes:
+      - shared-tmp:/tmp
+
+  xgate-ui-stg:
+    image: ghcr.io/envops-github/xgate-ui-xgate-ui:main-063b0cf
+    environment:
+      - GUAC_SERVER_HOST=10.217.107.103
+      - GUAC_SERVER_PORT=8089
+      - GUAC_WS_HOST=ws://localhost:8089
+      - GUAC_WS_PATH=/guacamole/websocket-tunnel
+      - PROTOCOL_HEADER=x-forwarded-proto
+      - HOST_HEADER=x-forwarded-host
+      - XGATE_HTTPS=false
+      - ORIGIN=http://localhost:32000
+    ports:
+      - "32000:3000"
+
+volumes:
+  postgres:
+  shared-tmp:

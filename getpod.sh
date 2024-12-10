@@ -2,7 +2,7 @@
 
 # Умолчания
 OUT="pods.csv"
-NAMESPACE="--all-namespaces"
+NAMESPACE="--namespace ns000000000000000000001"  # Задаём namespace по умолчанию
 HEADERS=true
 CONSOLE_ONLY=false
 
@@ -17,7 +17,7 @@ usage() {
     echo "Usage: $0 [options]"
     echo ""
     echo "Options:"
-    echo "  -n, --namespace <name>     Specify namespace (default: all namespaces)"
+    echo "  -n, --namespace <name>     Specify namespace (default: ns000000000000000000001)"
     echo "  -o, --output <file>        Output file (default: pods.csv)"
     echo "      --no-headers           Don't include headers in the output"
     echo "      --console-only         Output only to console (no file)"
@@ -65,30 +65,31 @@ testConnection() {
 getPods() {
     local data
 
-    # Получаем данные с kubectl и обрабатываем их с jq
+    # Получаем данные с kubectl
     data=$(kubectl get pods ${NAMESPACE} -o json | jq -r '
-        .items[] | 
-        .metadata.namespace + "," + 
-        .metadata.name + "," + 
-        (.spec.containers | map(.image) | join(";")) + "," + 
-        (.status.containerStatuses | map(.imageID // "N/A") | join(";")) + "," + 
-        (.status.hostIP // "N/A") + "," + 
-        (.status.podIP // "N/A") + "," + 
-        .status.phase
+        .items[] |
+        .metadata.namespace + "," +
+        .metadata.name + "," +
+        (.spec.containers | map(.image // "N/A") | join(";")) + "," +
+        (.status.containerStatuses // [] | map(.imageID // "N/A") | join(";")) + "," +
+        (.status.hostIP // "N/A") + "," +
+        (.status.podIP // "N/A") + "," +
+        (.status.phase // "N/A")
     ')
 
-    # Если включены заголовки, выводим их
+    # Если данные пусты, завершить
+    if [ -z "$data" ]; then
+        echo "No pods found or failed to process data in namespace ${NAMESPACE}" >&2
+        return
+    fi
+
+    # Печатаем заголовки и данные
     if [ "${HEADERS}" == true ]; then
         echo "Namespace,Pod Name,Images,Image IDs,Host IP,Pod IP,Status" > "${OUT}"
     fi
 
-    # Печатаем данные
-    if [ "${CONSOLE_ONLY}" == true ]; then
-        echo "${data}"
-    else
-        echo "${data}" >> "${OUT}"
-        cat "${OUT}"
-    fi
+    echo "${data}" >> "${OUT}"
+    [ "${CONSOLE_ONLY}" == true ] && echo "${data}"
 }
 
 # Основная функция
